@@ -1,0 +1,1 @@
+const stageBanner=document.createElement('div');stageBanner.id='censusTestBanner';stageBanner.textContent='CENSUS AI TEST · Separate local census · Production unchanged';document.body.prepend(stageBanner);
