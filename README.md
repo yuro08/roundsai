@@ -31,3 +31,14 @@ Use fictional cases only. This is not approved for real-patient deployment.
 node --test tests/api.test.mjs tests/notes.test.cjs
 
 The provider tests use deterministic mocked responses; passing them is not a live model evaluation. Perform a live fictional photo and text test after configuration.
+
+## Clinical assistant and learning
+
+- Patient heads-up: up to three source-linked reassessment questions using the chart and three prior note versions; reminders never become note findings automatically.
+- Presentations: quick (2–4 sentences) or detailed (structured 1–2 minutes), editable with manual copy and stale-chart indications.
+- Evidence: active-problem PubMed ESearch/EFetch, verified PMID/journal/date/DOI metadata, optional AI appraisal that can support, qualify or provide background rather than forcing support. No OpenEvidence API connection.
+- Learning: source-grounded draft MCQs, reviewer editing/approval/rejection, approved-only quizzes, graded explanations, per-user review timing and audit records.
+
+The learning schema is in supabase/migrations/20261115053332_roundsai_learning_review.sql. Reviewer membership is assigned explicitly; no account becomes an admin automatically. Database policies restrict draft visibility, reviewer mutations and private practice history. No new environment keys are required beyond the existing OpenAI and Supabase settings. NCBI_API_KEY is optional for higher-volume literature requests.
+
+Clinical and learning AI output still requires clinician review. No EHR write-back, automated orders, or clinical urgency ranking is implemented. Patient chart storage remains browser-local; learning content and attempts are stored in Supabase.
