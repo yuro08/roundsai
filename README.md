@@ -42,3 +42,12 @@ The provider tests use deterministic mocked responses; passing them is not a liv
 The learning schema is in supabase/migrations/20261115053332_roundsai_learning_review.sql. Reviewer membership is assigned explicitly; no account becomes an admin automatically. Database policies restrict draft visibility, reviewer mutations and private practice history. No new environment keys are required beyond the existing OpenAI and Supabase settings. NCBI_API_KEY is optional for higher-volume literature requests.
 
 Clinical and learning AI output still requires clinician review. No EHR write-back, automated orders, or clinical urgency ranking is implemented. Patient chart storage remains browser-local; learning content and attempts are stored in Supabase.
+
+
+## Account-based beta census
+
+Email/password signup and confirmation are handled by Supabase Auth. Configure the Auth Site URL as `https://roundsai-five.vercel.app` and a production SMTP provider for external beta confirmation emails (Supabase default email delivery can be restricted). Confirmed accounts can use the app; reviewer permissions are still explicit.
+
+`roundsai_workspaces` stores one versioned census per account under owner-only RLS. Active and discharged charts are preserved together. Autosave uses compare-and-swap revisions; concurrent edits cannot silently overwrite another device. The Account screen provides retry, draft export and conflict recovery. Local drafts are keyed by account; unassigned legacy browser records require explicit selection before import. Existing legacy browser data is never automatically attributed to a signed-in user.
+
+Use fictional cases for this beta. This release does not establish HIPAA compliance. One fictional Alex Morgan example is initialized only for a new account; removing/discharging all patients does not reseed the census.
