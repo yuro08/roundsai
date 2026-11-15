@@ -56,3 +56,8 @@ dialog.intake-sheet{padding:26px 25px 23px;border-radius:26px;width:min(440px,ca
  .welcome-shell {column-gap:30px;padding:36px}
 }
 .discharge-button{display:inline-flex;gap:5px;align-items:center;white-space:nowrap;font-size:11px;color:var(--teal);padding:7px 9px;border:1px solid var(--line);border-radius:20px}.discharge-button svg{width:13px;height:13px}.back-row .patient-room{margin-left:auto}.back-row{gap:8px}
+
+/* Original approved wordmark, fitted into the existing logo positions. */
+.wordmark .brand-logo{display:block;width:112px;height:28px;object-fit:cover}
+.welcome-brand .brand-logo{width:142px;height:36px}
+@media(min-width:900px){body:not(.welcome-mode) #navigation::before{content:'';width:130px;height:30px;background:url('/roundsai-logo.png') center/cover no-repeat}}
