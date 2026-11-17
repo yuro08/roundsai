@@ -35,7 +35,7 @@ export async function handle(request,env,fetcher=fetch){
  if(input.action==='publish'||input.action==='rollback'){
   if(!types.includes(input.workflow)||!Number.isSafeInteger(input.expected)||input.expected<0)throw Error('Invalid configuration revision.');
   let config=input.config;if(input.action==='rollback'){const rows=await db('roundsai_setting_releases?id=eq.'+encodeURIComponent(input.releaseId)+'&workflow=eq.'+input.workflow+'&select=config');if(!rows.length)throw Error('Release not found.');config=rows[0].config}
-  if(!config||typeof config.instructions!=='string'||config.instructions.trim().length<20||config.instructions.length>12000||typeof config.example!=='string'||config.example.length>12000||JSON.stringify(config).length>40000)throw Error('Invalid configuration.');
+  if(!config||typeof config.instructions!=='string'||config.instructions.trim().length<20||config.instructions.length>24000||typeof config.example!=='string'||config.example.length>12000||JSON.stringify(config).length>40000)throw Error('Invalid configuration.');
   const d=await db('rpc/roundsai_admin_publish',{method:'POST',body:JSON.stringify({p_workflow:input.workflow,p_config:config,p_expected:input.expected,p_actor:owner})});return response({published:true,...d})
  }
  if(input.action==='questions'){const rows=await db('roundsai_questions?select=*&order=created_at.desc&limit=1000');return response({connected:true,questions:rows.map(qView),limited:rows.length===1000})}
