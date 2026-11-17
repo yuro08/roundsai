@@ -1,0 +1,3 @@
+async function openAdmin(){const d=await RoundsAdminSession.api('page');document.open();document.write(d.html);document.close()}
+document.querySelector('#adminLogin').addEventListener('submit',async e=>{e.preventDefault();const b=document.querySelector('#loginButton'),err=document.querySelector('#error');b.disabled=true;err.textContent='';try{await RoundsAdminSession.signIn(document.querySelector('#email').value.trim(),document.querySelector('#password').value);document.querySelector('#password').value='';await openAdmin()}catch(e){err.textContent=e.message;b.disabled=false}});
+if(RoundsAdminSession.read())openAdmin().catch(e=>{document.querySelector('#error').textContent=e.message});
