@@ -1,4 +1,3 @@
-const KEY_HASH='6beb1d4ab0640e9b3a2b81b9cd9c915ed520ba7a482e12be2bac5061f37c02e5';
 const owner='ludwingr@yahoo.com';
 const types=['hpi','progress','consult','admission','icu','discharge','summary','presentation','headsup','learning'];
 const response=(d,s=200)=>Response.json(d,{status:s,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
@@ -14,13 +13,12 @@ export function questionInput(x){if(typeof x.stem!=='string'||x.stem.trim().leng
 function qView(q){return {id:q.id,stem:q.question,topic:q.topic,options:q.options,answer:q.correct_index,explanation:q.explanation,source:q.sources.map(x=>x.title||x.url||x.pmid||'').join('\n'),status:q.status==='draft'?'pending':q.status,revision:q.updated_at,history:[]}}
 export async function handle(request,env,fetcher=fetch){
  if(request.method!=='POST')return response({error:'Method not allowed'},405);
- const key=request.headers.get('x-roundsai-admin-key')||'';let jwtOwner=false;if(request.headers.get('authorization')){try{const r=await fetcher(env.SUPABASE_URL+'/auth/v1/user',{headers:{Authorization:request.headers.get('authorization'),apikey:env.SUPABASE_ANON_KEY||env.SUPABASE_SERVICE_ROLE_KEY},signal:AbortSignal.timeout(12000)});const u=await r.json();jwtOwner=r.ok&&u.id==='ff0c5409-e6a2-489b-bbfd-ea2b99a9e35a'&&u.email?.toLowerCase()===owner&&!!u.email_confirmed_at}catch{}}if(!jwtOwner&&(key.length<40||key.length>150))return response({error:'Unauthorized'},401);
- const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(key)))).map(x=>x.toString(16).padStart(2,'0')).join('');if(!jwtOwner&&digest!==KEY_HASH)return response({error:'Unauthorized'},401);
+ const auth=request.headers.get('authorization');if(!auth?.startsWith('Bearer '))return response({error:'Unauthorized'},401);let adminUser;try{const r=await fetcher(env.SUPABASE_URL+'/auth/v1/user',{headers:{Authorization:auth,apikey:env.SUPABASE_ANON_KEY||env.SUPABASE_SERVICE_ROLE_KEY},signal:AbortSignal.timeout(12000)});adminUser=await r.json();if(!r.ok||!adminUser.email_confirmed_at||adminUser.app_metadata?.beta_password_change_required||!(adminUser.id==='ff0c5409-e6a2-489b-bbfd-ea2b99a9e35a'&&adminUser.email?.toLowerCase()===owner||adminUser.app_metadata?.roundsai_admin===true))return response({error:'Admin access required'},403)}catch{return response({error:'Unauthorized'},401)}
  let input;try{const raw=await request.text();if(raw.length>1000000)return response({error:'Request too large'},413);input=JSON.parse(raw)}catch{return response({error:'Invalid request'},400)}
- if(input.actor!==owner)return response({error:'Owner access required'},403);
+ if(input.actor!==adminUser.email.toLowerCase())return response({error:'Owner access required'},403);
  const url=env.SUPABASE_URL,keyService=env.SUPABASE_SERVICE_ROLE_KEY;if(!url||!keyService)return response({error:'Connection unavailable'},503);
  async function db(path,options={}){const r=await fetcher(url+'/rest/v1/'+path,{...options,headers:{apikey:keyService,Authorization:'Bearer '+keyService,'Content-Type':'application/json',Prefer:'return=representation',...options.headers},signal:AbortSignal.timeout(18000)});const d=await r.json();if(!r.ok){const e=Error(r.status===409||String(d.message||'').includes('changed')?'This record changed. Reload before saving.':'Database action failed. Please reload and retry.');e.status=409;throw e}return d}
- async function actorId(){const r=await fetcher(url+'/auth/v1/admin/users?page=1&per_page=1000',{headers:{apikey:keyService,Authorization:'Bearer '+keyService},signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error('Could not verify the admin account.');const d=await r.json(),u=d.users.find(u=>u.email?.toLowerCase()===owner);if(!u)throw Error('Admin account not found.');return u.id}
+ async function actorId(){await db('roundsai_reviewers',{method:'POST',headers:{Prefer:'resolution=ignore-duplicates,return=representation'},body:JSON.stringify({user_id:adminUser.id})});return adminUser.id}
  try{
  if(input.action==='documents'){
   if(input.operation==='events'){const records=await db('roundsai_admin_documents?id=like.event:*&select=payload&order=updated_at.desc&limit=200');return response({records})}
@@ -30,13 +28,13 @@ export async function handle(request,env,fetcher=fetch){
   throw Error('Invalid document operation.');
  }
  if(input.action==='health')return response({connected:true});
- if(input.action==='analytics'){const dates=rangeDates(input.range,input.from,input.to),users=await db('rpc/roundsai_admin_stats',{method:'POST',body:JSON.stringify({p_start:dates.start,p_end:dates.end})});return response({connected:true,users,dates,trackingStartedAt:'2026-11-17T04:00:00Z',definitions:{attempts:'All recorded answers, including repeated questions',distinct_questions:'Different questions answered in the selected range',notes:'Successful note builds recorded after activity tracking was connected'}})}
+ if(input.action==='analytics'){const dates=rangeDates(input.range,input.from,input.to),users=await db('rpc/roundsai_admin_stats',{method:'POST',body:JSON.stringify({p_start:dates.start,p_end:dates.end})});const ar=await fetcher(url+'/auth/v1/admin/users?page=1&per_page=1000',{headers:{apikey:keyService,Authorization:'Bearer '+keyService}});if(!ar.ok)throw Error('Could not load admin roles');const roles=(await ar.json()).users;for(const u of users){const r=roles.find(r=>r.id===u.id);u.is_owner=u.id==='ff0c5409-e6a2-489b-bbfd-ea2b99a9e35a';u.is_admin=u.is_owner||r?.app_metadata?.roundsai_admin===true}return response({connected:true,users,dates,trackingStartedAt:'2026-11-17T04:00:00Z',definitions:{attempts:'All recorded answers, including repeated questions',distinct_questions:'Different questions answered in the selected range',notes:'Successful note builds recorded after activity tracking was connected'}})}
  if(input.action==='settings'){const settings=await db('roundsai_live_settings?select=*&order=workflow');const releases=await db('roundsai_setting_releases?select=*&order=created_at.desc&limit=100');return response({settings,releases})}
  if(input.action==='publish'||input.action==='rollback'){
   if(!types.includes(input.workflow)||!Number.isSafeInteger(input.expected)||input.expected<0)throw Error('Invalid configuration revision.');
   let config=input.config;if(input.action==='rollback'){const rows=await db('roundsai_setting_releases?id=eq.'+encodeURIComponent(input.releaseId)+'&workflow=eq.'+input.workflow+'&select=config');if(!rows.length)throw Error('Release not found.');config=rows[0].config}
   if(!config||typeof config.instructions!=='string'||config.instructions.trim().length<20||config.instructions.length>24000||typeof config.example!=='string'||config.example.length>12000||JSON.stringify(config).length>40000)throw Error('Invalid configuration.');
-  const d=await db('rpc/roundsai_admin_publish',{method:'POST',body:JSON.stringify({p_workflow:input.workflow,p_config:config,p_expected:input.expected,p_actor:owner})});return response({published:true,...d})
+  const d=await db('rpc/roundsai_admin_publish',{method:'POST',body:JSON.stringify({p_workflow:input.workflow,p_config:config,p_expected:input.expected,p_actor:adminUser.email.toLowerCase()})});return response({published:true,...d})
  }
  if(input.action==='questions'){const rows=await db('roundsai_questions?select=*&order=created_at.desc&limit=1000');return response({connected:true,questions:rows.map(qView),limited:rows.length===1000})}
  if(input.action==='question'){
