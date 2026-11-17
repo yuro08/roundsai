@@ -1,0 +1,30 @@
+const reply=(d,s=200)=>Response.json(d,{status:s,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
+export async function handleBeta(request,env,fetcher=fetch){
+ if(request.method!=='POST')return reply({error:'Method not allowed'},405);
+ const auth=request.headers.get('authorization');if(!auth?.startsWith('Bearer '))return reply({error:'Sign in required'},401);
+ const base=env.SUPABASE_URL,secret=env.SUPABASE_SERVICE_ROLE_KEY;
+ const headers={apikey:secret,Authorization:auth,'Content-Type':'application/json'};
+ try{
+ const v=await fetcher(base+'/auth/v1/user',{headers,signal:AbortSignal.timeout(12000)});if(!v.ok)return reply({error:'Sign in again.'},401);const user=await v.json();if(!user.id||!user.email_confirmed_at)return reply({error:'Confirmed account required.'},403);
+ const raw=await request.text();if(raw.length>3000)return reply({error:'Request too large'},413);let x;try{x=JSON.parse(raw)}catch{return reply({error:'Invalid request'},400)}
+ const adminHeaders={apikey:secret,Authorization:'Bearer '+secret,'Content-Type':'application/json'};
+ if(x.action==='create'){
+ if(user.id!=='ff0c5409-e6a2-489b-bbfd-ea2b99a9e35a'||user.email?.toLowerCase()!=='ludwingr@yahoo.com')return reply({error:'Owner access required'},403);
+ const email=typeof x.email==='string'?x.email.trim().toLowerCase():'';if(email.length>254||! /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return reply({error:'Enter a valid tester email.'},400);
+ const password='Ra!'+Array.from(crypto.getRandomValues(new Uint8Array(24)),n=>n.toString(16).padStart(2,'0')).join('');
+ const r=await fetcher(base+'/auth/v1/admin/users',{method:'POST',headers:adminHeaders,body:JSON.stringify({email,password,email_confirm:true,app_metadata:{roundsai_beta:true,beta_password_change_required:true,beta_created_by:user.id},user_metadata:{}}),signal:AbortSignal.timeout(20000)});
+ if(!r.ok){const d=await r.json();return reply({error:/already|registered|exists/i.test(d.msg||d.message||'')?'That email already has an account. Its password and data were not changed.':'Could not create this beta account. Check the email and retry.'},r.status===422?409:400)}
+ const d=await r.json();return reply({created:true,user:{id:d.id||d.user?.id,email},temporaryPassword:password,requiresPasswordChange:true});
+ }
+ if(x.action==='password'){
+ if(typeof x.password!=='string'||x.password.length<12||x.password.length>128)return reply({error:'Choose a password with 12–128 characters.'},400);
+ const r=await fetcher(base+'/auth/v1/admin/users/'+encodeURIComponent(user.id),{method:'PUT',headers:adminHeaders,body:JSON.stringify({password:x.password,app_metadata:{...user.app_metadata,beta_password_change_required:false}}),signal:AbortSignal.timeout(20000)});
+ if(!r.ok)return reply({error:'Could not change your password. Choose a different password and retry.'},400);
+ // Require a fresh sign-in. Do not return, persist or log either password.
+ await fetcher(base+'/auth/v1/logout?scope=global',{method:'POST',headers,signal:AbortSignal.timeout(12000)}).catch(()=>{});
+ return reply({changed:true,signInRequired:true});
+ }
+ return reply({error:'Unsupported action'},400);
+ }catch{return reply({error:'Account service unavailable. Please retry.'},502)}
+}
+if(typeof Deno!=='undefined')Deno.serve(req=>handleBeta(req,Deno.env.toObject()));

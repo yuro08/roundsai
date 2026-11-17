@@ -12,6 +12,7 @@ export async function adminWorkspaceRequest(request,env=process.env,fetcher=fetc
   if(user.id!=='ff0c5409-e6a2-489b-bbfd-ea2b99a9e35a'||user.email?.toLowerCase()!=='ludwingr@yahoo.com')return out({error:'This account does not have admin access.'},403);
   const resource=url.searchParams.get('resource')||'status';
   if(resource==='page')return out({html:page},200);
+  if(resource==='create-beta'){if(request.method!=='POST')return out({error:'Use POST'},405);const raw=await request.text();if(raw.length>1000)return out({error:'Request too large'},413);let x;try{x=JSON.parse(raw)}catch{return out({error:'Invalid request'},400)}const r=await fetcher(env.SUPABASE_URL+'/functions/v1/roundsai-beta-accounts',{method:'POST',headers:{apikey:env.SUPABASE_ANON_KEY,Authorization:request.headers.get('authorization'),'Content-Type':'application/json'},body:JSON.stringify({action:'create',email:x.email}),signal:AbortSignal.timeout(30000)});return out(await r.json(),r.status);}
   if(!['status','users','live-settings','release','activity','profiles','profile','preview','questions','question'].includes(resource))return out({error:'Not found'},404);
   const authorization=request.headers.get('authorization'),headers=new Headers(request.headers);headers.set('oai-authenticated-user-email',user.email.toLowerCase());
   url.pathname='/api/'+resource;url.searchParams.delete('resource');
