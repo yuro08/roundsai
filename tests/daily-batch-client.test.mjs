@@ -6,3 +6,16 @@ test('Batch failure retains old note with per-patient retry state',async()=>{con
 test('Chart edits during generation preserve result in history instead of replacing draft',async()=>{const c=setup();const pending=c.context.generateDailyNotes();c.p.note='Manual edit';c.p.rev++;c.resolve(response);await pending;assert.equal(c.p.note,'Manual edit');assert.match(c.p.versions[0].text,/T-piece/);assert.equal(c.batch().results.a.status,'Saved in Version history')});
 test('Batch account switch saves detached result for original owner only',async()=>{const c=setup();const pending=c.context.generateDailyNotes();c.context.cloudSession={user:{id:'other'}};c.resolve(response);await pending;assert.equal(c.p.note,'Original note');assert.equal(c.preserved[0][0],'owner')});
 test('Changed chart after confirmation blocks generation before modifying it',async()=>{const c=setup();c.p.rev++;c.p.update='Newer update';await c.context.generateDailyNotes();assert.equal(c.calls(),0);assert.equal(c.p.update,'Newer update');assert.equal(c.batch().results.a.status,'Failed')});
+
+test('First Generate click checks unchanged confirmed updates and continues to the note',async()=>{
+ const c=setup();vm.runInContext('dailyBatch.checked=false',c.context);let checks=0,notes=0;
+ c.context.featureAPI=async(path)=>{if(path==='/api/assist'){checks++;return {patients:[{patientId:'a',update:'Now on T-piece.',questions:[]}],unmatched:[]}}notes++;return response};
+ await c.context.generateDailyNotes();assert.equal(checks,1);assert.equal(notes,1);assert.equal(c.batch().results.a.status,'Draft ready');assert.match(c.p.note,/T-piece/);
+});
+test('New clarification questions stop generation and unconfirm the affected patient',async()=>{
+ const c=setup();vm.runInContext('dailyBatch.checked=false',c.context);let notes=0;c.context.featureAPI=async(path)=>{if(path==='/api/assist')return {patients:[{patientId:'a',update:'Now on T-piece.',questions:['Did the transfer occur?']}],unmatched:[]};notes++;return response};
+ await c.context.generateDailyNotes();assert.equal(notes,0);assert.equal(c.batch().confirmed.a,false);assert.match(c.batch().error,/clarification/);assert.equal(c.p.note,'Original note');
+});
+test('Typing during a checker response cannot be overwritten by the older request',async()=>{
+ const c=setup();const checking=c.context.checkDailyUpdates(false);c.batch().updates.a='Newer typed update';c.resolve({patients:[{patientId:'a',update:'Now on T-piece.',questions:[]}],unmatched:[]});assert.equal(await checking,false);assert.equal(c.batch().updates.a,'Newer typed update');assert.match(c.batch().error,/edited text is preserved/);
+});

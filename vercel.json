@@ -12,6 +12,15 @@
   "functions": {
     "api/learning.mjs": {
       "maxDuration": 300
+    },
+    "api/note.mjs": {
+      "maxDuration": 300
+    },
+    "api/assist.mjs": {
+      "maxDuration": 300
+    },
+    "api/chart.mjs": {
+      "maxDuration": 300
     }
   }
 }
