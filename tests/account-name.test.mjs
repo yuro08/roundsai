@@ -5,7 +5,7 @@ function setup(){
  const context=vm.createContext({console,JSON,Date,AbortSignal,localStorage:{getItem:k=>memory.get(k)||null,setItem:(k,v)=>memory.set(k,v),removeItem:k=>memory.delete(k)},sessionStorage:{getItem:()=>null,removeItem(){}},document:{addEventListener:(type,fn)=>(handlers[type]??=[]).push(fn),querySelector:()=>null,querySelectorAll:()=>[]},window:{addEventListener(){}},setTimeout:()=>1,setInterval:()=>1,clearTimeout(){},$:id=>fields[id.slice(1)],modal:(...args)=>modals.push(args),icon:()=>'',close(){},render(){},toast(){},patients:[{id:'existing',note:'Keep this note'}],selected:'existing',route:'today',esc:String,clone:structuredClone});
  vm.runInContext(script,context);vm.runInContext("cloudConfig={supabaseUrl:'https://auth.invalid',supabaseKey:'public'}",context);
  context.fetch=async(url,options={})=>{calls.push({url,...options});return Response.json({user:{id:'new-user'}})};
- return {context,memory,calls,modals,fields,submit:async id=>{for(const handler of handlers.submit)await handler({target:{id,querySelector:()=>button},preventDefault(){}})}};
+ return {context,memory,calls,modals,fields,click:async id=>{for(const handler of handlers.click||[])await handler({target:{closest:()=>({id,dataset:{}})}})},submit:async id=>{for(const handler of handlers.submit)await handler({target:{id,querySelector:()=>button},preventDefault(){}})}};
 }
 test('signup requires a nonblank name and sends normalized name to Auth',async()=>{
  const s=setup();await s.context.cloudSignIn(null,'signup');assert.match(s.modals[0][1],/id="cloudFirstName"[^>]*required/);
@@ -35,4 +35,13 @@ test('older cached sessions hydrate name directly from Auth even when census syn
 test('late profile response cannot show a previous account name after account switch',async()=>{
  const s=setup();const session=id=>({access_token:'test',refresh_token:'test',expires_at:9999999999,user:{id,email:'fictional@example.invalid'}});s.context.storeCloudSession(session('one'));
  let resolve;s.context.fetch=()=>new Promise(r=>{resolve=r});const pending=s.context.refreshAccountProfile();await new Promise(r=>setImmediate(r));s.context.storeCloudSession(session('two'));resolve(Response.json({id:'one',user_metadata:{first_name:'Wrong account'}}));await pending;assert.equal(s.context.accountGreetingName(),'Resident');assert.equal(JSON.parse(s.memory.get('roundsai-session')).user.id,'two');
+});
+
+test('Normal account sign-out revokes only this device session',async()=>{
+ const s=setup();s.context.seed=[];s.context.migrate=x=>x;
+ s.context.fetch=async(url,o)=>{s.calls.push({url,...o});return Response.json({})};
+ s.context.storeCloudSession({access_token:'test',refresh_token:'test',expires_at:9999999999,user:{id:'one',email:'fictional@example.invalid'}});
+ await s.click('cloudLogout');assert.equal(s.calls.length,1);
+ assert.equal(s.calls[0].url,'https://auth.invalid/auth/v1/logout?scope=local');
+ assert.equal(s.memory.get('roundsai-session'),undefined)
 });
