@@ -8,5 +8,10 @@
       "source": "/roundsaiadmin",
       "destination": "/roundsaiadmin/index.html"
     }
-  ]
+  ],
+  "functions": {
+    "api/learning.mjs": {
+      "maxDuration": 300
+    }
+  }
 }
