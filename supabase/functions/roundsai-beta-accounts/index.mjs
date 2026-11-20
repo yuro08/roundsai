@@ -36,7 +36,7 @@ export async function handleBeta(request,env,fetcher=fetch){
  const d=await r.json();return reply({created:true,user:{id:d.id||d.user?.id,email},temporaryPassword:password,requiresPasswordChange:true});
  }
  if(x.action==='password'){
- if(typeof x.password!=='string'||x.password.length<12||x.password.length>128)return reply({error:'Choose a password with 12–128 characters.'},400);
+ if(typeof x.password!=='string'||x.password.length<8||x.password.length>128)return reply({error:'Choose a password with 8–128 characters.'},400);
  const r=await fetcher(base+'/auth/v1/admin/users/'+encodeURIComponent(user.id),{method:'PUT',headers:adminHeaders,body:JSON.stringify({password:x.password,app_metadata:{...user.app_metadata,beta_password_change_required:false}}),signal:AbortSignal.timeout(20000)});
  if(!r.ok)return reply({error:'Could not change your password. Choose a different password and retry.'},400);
  // Require a fresh sign-in. Do not return, persist or log either password.

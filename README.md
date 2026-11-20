@@ -140,3 +140,6 @@ Validation: all 112 tests pass, including an eight-patient save regression, arch
 
 ## Mobile bottom navigation clearance
 Fixed daily-notes bottom actions obscured by the mobile navigation. The daily workspace's 40px bottom-padding override was smaller than the fixed 75px navigation plus iPhone safe-area inset. A final mobile-only rule now reserves 125px plus the safe-area inset for all authenticated/demo content screens, overriding the daily-notes exception. Scroll padding and control scroll margins also reserve bottom-navigation clearance. Existing navigation, desktop spacing and welcome screen remain unchanged. Checked stylesheet rule order, breakpoint and geometry (minimum 50px clearance beyond navigation height). Physical iPhone verification remains needed. Rollback ae50bfc52d92fca0a772e57d780c2e1ec792dd6b.
+
+## Eight-character password minimum
+Signup and first-login password setup now accept passwords with at least 8 characters; the beta-account service validates 8–128 characters server-side. Existing credentials and required first-login password changes remain unchanged. Boundary checks cover 7/8/128/129 characters with a mocked Auth service. Rollback source: 9573d13b764fc54c8517cf32002f1b685e7fcbb3.

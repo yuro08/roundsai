@@ -8,3 +8,23 @@ test('Duplicate account cannot reset existing password or data',async()=>{let wr
 test('Temporary account cannot open cloud APIs until password changed',async()=>{await assert.rejects(()=>authenticate(new Request('https://app.invalid/api/workspace',{headers:{Authorization:'Bearer test'}}),env,async()=>Response.json(member)),e=>e.code==='PASSWORD_CHANGE_REQUIRED')});
 test('Password change targets authenticated caller, preserves metadata and clears setup flag',async()=>{let update,paths=[];const r=await handleBeta(req({action:'password',password:'Fictional-test-password-strong',userId:'someone-else'}),env,async(url,o)=>{paths.push(url);if(url.endsWith('/auth/v1/user'))return Response.json(member);if(o.method==='PUT')update=JSON.parse(o.body);return Response.json({})});assert.equal(r.status,200);assert.equal(update.app_metadata.roundsai_beta,true);assert.equal(update.app_metadata.beta_password_change_required,false);assert(paths.includes(env.SUPABASE_URL+'/auth/v1/admin/users/member'));assert(paths.some(p=>p.endsWith('/logout?scope=global')));assert.deepEqual(await r.json(),{changed:true,signInRequired:true})});
 test('Weak password cannot clear setup flag and cross-origin password requests fail',async()=>{let n=0;const r=await handleBeta(req({action:'password',password:'short'}),env,async()=>{n++;return Response.json(member)});assert.equal(r.status,400);assert.equal(n,1);const p=await passwordRequest(new Request('https://app.invalid/api/password',{method:'POST',headers:{Origin:'https://other.invalid'},body:'{}'}),env);assert.equal(p.status,403)});
+
+test('Password length boundaries accept 8 and 128, reject 7 and 129 without changing setup',async()=>{
+ for(const length of [7,8,128,129]){
+  let updates=0;
+  const r=await handleBeta(req({action:'password',password:'a'.repeat(length)}),env,async(url,o)=>{
+   if(url.endsWith('/auth/v1/user'))return Response.json(member);
+   if(o.method==='PUT'){
+    updates++;
+    const payload=JSON.parse(o.body);
+    assert.equal(payload.password.length,length);
+    assert.equal(payload.app_metadata.beta_password_change_required,false);
+    assert.equal(payload.app_metadata.roundsai_beta,true);
+   }
+   return Response.json({});
+  });
+  const accepted=length>=8&&length<=128;
+  assert.equal(r.status,accepted?200:400);
+  assert.equal(updates,accepted?1:0);
+ }
+});
