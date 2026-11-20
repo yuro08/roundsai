@@ -24,3 +24,15 @@ test('account name saves through Auth for the signed-in user without changing ce
  s.context.fetch=async(url,options)=>{s.calls.push({url,...options});return Response.json({id:'one',user_metadata:{first_name:'Ludwing'}})};
  await s.submit('accountNameForm');assert.equal(s.calls.length,1);assert.equal(s.calls[0].method,'PUT');assert.deepEqual(JSON.parse(s.calls[0].body),{data:{first_name:'Ludwing'}});assert.equal(s.context.accountGreetingName(),'Ludwing');assert.equal(vm.runInContext('patients[0].note',s.context),'Keep this note');
 });
+
+test('older cached sessions hydrate name directly from Auth even when census sync failed',async()=>{
+ const s=setup();s.context.storeCloudSession({access_token:'test',refresh_token:'test',expires_at:9999999999,user:{id:'one',email:'fictional@example.invalid'}});
+ vm.runInContext("patients=[{id:'existing',note:'Unsynced note'}];workspaceDirty=true;workspaceError='Census unavailable'",s.context);
+ const greeting={textContent:'Resident'};s.context.document.querySelector=()=>greeting;
+ s.context.fetch=async(url,options)=>{s.calls.push({url,...options});return Response.json({id:'one',user_metadata:{first_name:'Ludwing'}})};
+ await s.context.refreshAccountProfile();assert.equal(s.calls[0].url,'https://auth.invalid/auth/v1/user');assert.equal(s.calls[0].cache,'no-store');assert.equal(greeting.textContent,'Ludwing');assert.equal(JSON.parse(s.memory.get('roundsai-session')).user.firstName,'Ludwing');assert.equal(vm.runInContext('patients[0].note',s.context),'Unsynced note');assert.equal(vm.runInContext('workspaceDirty',s.context),true);assert.equal(vm.runInContext('workspaceError',s.context),'Census unavailable');
+});
+test('late profile response cannot show a previous account name after account switch',async()=>{
+ const s=setup();const session=id=>({access_token:'test',refresh_token:'test',expires_at:9999999999,user:{id,email:'fictional@example.invalid'}});s.context.storeCloudSession(session('one'));
+ let resolve;s.context.fetch=()=>new Promise(r=>{resolve=r});const pending=s.context.refreshAccountProfile();await new Promise(r=>setImmediate(r));s.context.storeCloudSession(session('two'));resolve(Response.json({id:'one',user_metadata:{first_name:'Wrong account'}}));await pending;assert.equal(s.context.accountGreetingName(),'Resident');assert.equal(JSON.parse(s.memory.get('roundsai-session')).user.id,'two');
+});

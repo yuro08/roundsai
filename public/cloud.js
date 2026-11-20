@@ -83,3 +83,26 @@ document.addEventListener('submit',async e=>{
   setAccountFirstName(userFirstName(d));close();render();toast('Name saved.');
  }catch(err){error.textContent=err.message;button.disabled=false}
 });
+
+// Refresh display metadata separately from census sync, including older cached sessions.
+let accountProfileRefresh=null;
+async function refreshAccountProfile(){
+ const owner=cloudSession?.user?.id;if(!owner)return;
+ if(accountProfileRefresh?.owner===owner)return accountProfileRefresh.promise;
+ const task={owner};accountProfileRefresh=task;
+ task.promise=(async()=>{
+  try{
+   await ensureCloudSession();if(cloudSession?.user?.id!==owner)return;
+   const c=await getCloudConfig();if(cloudSession?.user?.id!==owner)return;
+   const r=await fetch(c.supabaseUrl+'/auth/v1/user',{cache:'no-store',headers:{apikey:c.supabaseKey,...cloudHeaders()},signal:AbortSignal.timeout(15000)});
+   if(!r.ok)return;const user=await r.json();
+   if(user.id!==owner||cloudSession?.user?.id!==owner)return;
+   setAccountFirstName(userFirstName(user));
+  }catch{}finally{if(accountProfileRefresh===task)accountProfileRefresh=null}
+ })();return task.promise;
+}
+window.addEventListener('focus',refreshAccountProfile);
+window.addEventListener('pageshow',refreshAccountProfile);
+window.addEventListener('online',refreshAccountProfile);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshAccountProfile()});
+if(cloudSession)setTimeout(refreshAccountProfile,0);
