@@ -1,0 +1,15 @@
+import {AppError} from './ai.mjs';
+import {cleanWorkspaceEncoding} from './workspace.mjs';
+export function validateOrganizer(data){
+ if(!data||!Array.isArray(data.tasks)||data.tasks.length>2000)throw new AppError('Keep at most 2,000 organizer tasks. Export completed tasks before removing them.');
+ const ids=new Set();const tasks=data.tasks.map(t=>{if(!t||typeof t.id!=='string'||!t.id||t.id.length>100||ids.has(t.id)||typeof t.text!=='string'||!t.text.trim()||t.text.length>240||typeof t.done!=='boolean'||!['Rounds','Study','Personal'].includes(t.list)||!['normal','high','urgent'].includes(t.priority)||typeof t.notes!=='string'||t.notes.length>2000||typeof t.due!=='string'||(t.due&&!/^\d{4}-\d{2}-\d{2}$/.test(t.due))||typeof t.completedAt!=='string'||t.completedAt.length>40)throw new AppError('A task is incomplete. Export your organizer and retry.');if(t.due&&(!Number.isFinite(Date.parse(t.due+'T12:00:00Z'))||new Date(t.due+'T12:00:00Z').toISOString().slice(0,10)!==t.due))throw new AppError('Choose a valid task date.');ids.add(t.id);return {id:t.id,text:t.text.trim(),notes:t.notes,list:t.list,priority:t.priority,due:t.due,done:t.done,completedAt:t.completedAt}});return {tasks};
+}
+export async function organizerRequest(request,env,user,fetcher=fetch){
+ const base=env.SUPABASE_URL.replace(/\/$/,'')+'/rest/v1/roundsai_organizers',scope='?user_id=eq.'+encodeURIComponent(user.id),headers={apikey:env.SUPABASE_ANON_KEY,Authorization:request.headers.get('authorization'),'Content-Type':'application/json',Prefer:'return=representation'};
+ async function call(url,opts={}){const r=await fetcher(url,{...opts,headers:{...headers,...opts.headers},signal:AbortSignal.timeout(15000)});const d=await r.json().catch(()=>null);if(!r.ok)throw new AppError('Could not sync your organizer. Your device draft is preserved.',r.status===401?401:503);return d||[]}
+ if(request.method==='GET'){const rows=await call(base+scope+'&select=data,revision,updated_at');return {...(rows[0]||{data:null,revision:0}),owner:{id:user.id}}}
+ if(request.method!=='PUT')throw new AppError('Method not allowed.',405);
+ const raw=await request.text();if(raw.length>2000000)throw new AppError('Organizer is too large. Export your tasks.',413);let body;try{body=JSON.parse(raw)}catch{throw new AppError('Invalid organizer request.')}const data=validateOrganizer(cleanWorkspaceEncoding(body.data)),revision=body.revision;if(!Number.isSafeInteger(revision)||revision<0)throw new AppError('Reload the organizer before saving.');
+ const rows=revision===0?await call(base+'?on_conflict=user_id',{method:'POST',headers:{Prefer:'resolution=ignore-duplicates,return=representation'},body:JSON.stringify({user_id:user.id,data,revision:1})}):await call(base+scope+'&revision=eq.'+revision,{method:'PATCH',body:JSON.stringify({data,revision:revision+1,updated_at:new Date().toISOString()})});
+ if(!rows.length)throw new AppError('Organizer changed on another device. Your draft is preserved. Export it, then load the latest tasks.',409,'ORGANIZER_CONFLICT');return {revision:rows[0].revision,updated_at:rows[0].updated_at,owner:{id:user.id}};
+}
