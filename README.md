@@ -143,3 +143,6 @@ Fixed daily-notes bottom actions obscured by the mobile navigation. The daily wo
 
 ## Eight-character password minimum
 Signup and first-login password setup now accept passwords with at least 8 characters; the beta-account service validates 8–128 characters server-side. Existing credentials and required first-login password changes remain unchanged. Boundary checks cover 7/8/128/129 characters with a mocked Auth service. Rollback source: 9573d13b764fc54c8517cf32002f1b685e7fcbb3.
+
+## Personalized account greeting
+Signup now requires a first name, stored in Auth user metadata. Home uses the escaped name in its existing greeting. Existing users can save a first name in Account. Sessions retain the display name and authenticated workspace reads refresh it on other devices without modifying census data. Display metadata never grants privileges. Owner Ludwing's first_name was set on his existing Yahoo account; no credentials or patient data changed. 117 automated tests passed, including signup validation, metadata submission, profile-name saves, account separation and census preservation. Auth calls were mocked; physical device signup was not tested. Rollback source: 54ad262b1ba552aa2e3559b744c31e8747176283.
