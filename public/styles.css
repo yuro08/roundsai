@@ -63,3 +63,9 @@ dialog.intake-sheet{padding:26px 25px 23px;border-radius:26px;width:min(440px,ca
 @media(min-width:900px){body:not(.welcome-mode) #navigation::before{content:'';width:130px;height:30px;background:url('/roundsai-logo.png') center/cover no-repeat}}
 /* Daily notes adds a focused workspace using the established controls and palette. */
 .update-dictation{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:5px 0 16px}.update-dictation small{font-size:12px;color:var(--muted)}.daily-card{border:1px solid var(--line);border-radius:18px;padding:20px;margin:16px 0;background:#fff}.daily-card h2{font-size:18px;margin:0}.daily-card small{display:block;color:var(--muted);margin:5px 0 15px}.daily-card label:not(.daily-select){display:block;margin:15px 0 8px}.daily-select{display:flex;align-items:center;gap:14px;cursor:pointer}.daily-select input,.daily-confirm input{accent-color:var(--teal);width:18px;height:18px}.daily-confirm{font-size:14px}.daily-note{white-space:pre-wrap;overflow-wrap:anywhere;font:14px/1.8 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:20px 0}.daily-results .inline-actions{flex-wrap:wrap}body[data-screen="daily-notes"] #main{padding-bottom:40px}@media(min-width:1000px){.daily-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.daily-grid .daily-card{margin:0}.daily-results{max-width:1100px}}
+/* Keep final actions above the fixed mobile navigation, including iPhone safe areas. */
+@media(max-width:899px){
+ body:not(.welcome-mode) .phone #main{padding-bottom:calc(125px + env(safe-area-inset-bottom,0px))}
+ html{scroll-padding-bottom:calc(100px + env(safe-area-inset-bottom,0px))}
+ body:not(.welcome-mode) #main :is(button,input,textarea,select,[tabindex]){scroll-margin-bottom:calc(100px + env(safe-area-inset-bottom,0px))}
+}
