@@ -58,3 +58,19 @@ test('Recovery audit failure does not silently return unchecked cleaned notes',a
 test('Section outline labels are not mistaken for administration routes',()=>{assert.deepEqual(unsupportedNoteBoilerplate({sections:[{heading:'IV. Examination',body:'Wheezing documented.'}],problems:[],generalManagement:'',disposition:''},{latestClinicianUpdate:'Wheezing documented.'}),[])});
 
 test('Outpatient follow-up is preserved as an explicit disposition plan',()=>{assert(hasDocumentedDisposition({latestClinicianUpdate:'Follow up outpatient. Possible biological therapy.'}));});
+
+test('Outpatient follow-up does not authorize discharge home, preferences, a bedside visit or new workup',()=>{
+ const source={latestClinicianUpdate:'On NC 3L, improved respiratory symptoms. Follow up outpatient. Possible biologic therapy for persistent asthma. AERD possible cause.'};
+ const d={sections:[{heading:'HPI',body:'Patient seen at bedside. Now on 3 L nasal cannula. The patient is aware of the plan and interested in treatment.'}],problems:[{title:'Asthma',assessment:'Respiratory symptoms have improved.',plan:['Further evaluation for AERD.','Continue oxygen as needed.'],searchTerms:'',codeHints:[]}],generalManagement:'',disposition:'Discharge home with outpatient follow-up.'};
+ assert.deepEqual(unsupportedNoteBoilerplate(d,source),['bedside encounter','patient awareness or preference','discharge decision','oxygen as-needed instruction','AERD workup plan']);
+ const cleaned=removeUnsupportedNoteSentences(d,source),text=renderClinicalNote(cleaned,null,false);assert.match(text,/3 L nasal cannula/);assert(!/bedside|aware|discharge|as needed|evaluation for/i.test(text));
+});
+test('Explicit bedside evaluation and discharge plan are retained',()=>{
+ const d={sections:[{heading:'Subjective',body:'Patient seen at bedside. The patient is aware of the plan.'}],problems:[],generalManagement:'Continue oxygen as needed.',disposition:'Discharge home.'};
+ assert.deepEqual(unsupportedNoteBoilerplate(d,{latestClinicianUpdate:'Patient seen at bedside, aware of the plan. Discharge home. Continue oxygen as needed.'}),[])
+});
+test('Respiratory symptoms do not specify dyspnea or failure of an existing regimen',()=>{
+ const d={sections:[{heading:'Chief Complaint',body:'Shortness of breath. Asthma is not fully controlled by her existing regimen.'}],problems:[],generalManagement:'',disposition:''};
+ assert.deepEqual(unsupportedNoteBoilerplate(d,{latestClinicianUpdate:'Persistent asthma with respiratory symptoms.'}),['specific dyspnea symptom','regimen failure'])
+});
+test('No-documentation boilerplate is omitted from copyable note',()=>{const text=renderClinicalNote({sections:[{heading:'HPI',body:'On 3 L nasal cannula. No documentation of prophylaxis, diet or code status.'}],problems:[],generalManagement:'',disposition:''},null,false);assert.match(text,/3 L/);assert(!text.includes('No documentation'))});
