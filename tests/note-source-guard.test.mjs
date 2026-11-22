@@ -74,3 +74,5 @@ test('Respiratory symptoms do not specify dyspnea or failure of an existing regi
  assert.deepEqual(unsupportedNoteBoilerplate(d,{latestClinicianUpdate:'Persistent asthma with respiratory symptoms.'}),['specific dyspnea symptom','regimen failure'])
 });
 test('No-documentation boilerplate is omitted from copyable note',()=>{const text=renderClinicalNote({sections:[{heading:'HPI',body:'On 3 L nasal cannula. No documentation of prophylaxis, diet or code status.'}],problems:[],generalManagement:'',disposition:''},null,false);assert.match(text,/3 L/);assert(!text.includes('No documentation'))});
+
+test('Nasal discharge is not a hospital discharge decision',()=>{const d={sections:[{heading:'ROS',body:'No nasal discharge.'}],problems:[],generalManagement:'',disposition:''};assert.deepEqual(unsupportedNoteBoilerplate(d,{latestClinicianUpdate:'No rhinorrhea.'}),[])});
