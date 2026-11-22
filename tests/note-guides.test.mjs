@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {noteRequest} from '../server/settings.mjs';import {NOTE_GUIDES} from '../server/note-guides.mjs';import {lookupCodes,validateCoding,codeProblems} from '../server/icd.mjs';import {renderClinicalNote} from '../server/clinical-note.mjs';
+import {noteRequest} from '../server/settings.mjs';import {NOTE_GUIDES} from '../server/note-guides.mjs';import {lookupCodes,validateCoding,codeProblems,asthmaSeveritySupported} from '../server/icd.mjs';import {renderClinicalNote} from '../server/clinical-note.mjs';
 const doc={sections:[{heading:'Subjective',body:'Patient denies chest pain.'}],problems:[{title:'Pneumonia',assessment:'Right basilar opacity supports the documented pneumonia.',plan:['Continue the documented antimicrobial regimen.'],searchTerms:'pneumonia unspecified organism',codeHints:['J18.9']}],generalManagement:'',disposition:'Awaiting documented culture results.',missing:[]};
 const ai=d=>Response.json({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify({...d,updateReview:d.updateReview||{complete:true,consistent:true,issues:[]}})}]}]});
 test('Owner guides contain full requested styles and repeated progress copy is removed',()=>{assert.equal(NOTE_GUIDES.progress.split('MASTER PROMPT:').length,2);assert(NOTE_GUIDES.progress.includes('SPECIAL INSTRUCTIONS WHEN I SAY'));assert(NOTE_GUIDES.admission.includes('Home Medications'));assert(NOTE_GUIDES.progress.includes('DISPOSITION'))});
@@ -22,3 +22,12 @@ test('Failed latest-update reconciliation rejects the draft instead of saving a 
 
 test('Revision mode supplies target and new request without replacing today update; retains earlier additions',async()=>{const calls=[];const update='Now on T-piece, awaiting LTAC.';await noteRequest({OPENAI_API_KEY:'test'},{type:'progress',action:'revise',revisionRequest:'Also document known OSA. Do not add treatments.',patient:{update,note:'Existing editable draft',noteAmendments:[{text:'Family was at bedside.',sourceUpdate:update,at:'2026-11-18'}],problems:[]}},async(u,o)=>{calls.push(JSON.parse(o.body));return ai(doc)});for(const call of calls){const input=JSON.parse(call.input[0].content),ctx=input.actualSource||input;assert.equal(ctx.latestClinicianUpdate,update);assert.equal(ctx.revisionTarget,'Existing editable draft');assert.match(ctx.requestedRevision,/known OSA/);assert.equal(ctx.clinicianAmendments[0].text,'Family was at bedside.');assert.match(call.instructions,/never independent clinical evidence/);assert.match(call.instructions,/Do not invent a treatment plan/);assert.match(call.instructions,/Preserve unaffected wording/)} });
 test('Revision validation rejects empty targets and oversized requests before provider calls',async()=>{for(const patient of [{update:'Current',note:''},{update:'Current',note:'draft'}]){await assert.rejects(()=>noteRequest({OPENAI_API_KEY:'test'},{type:'progress',action:'revise',revisionRequest:patient.note?'x'.repeat(4001):'Add OSA',patient},()=>{throw Error('Must not call provider')}),/Supply the current note/)}});
+
+test('Asthma coding cannot infer severe persistent disease from proposed biologic therapy',()=>{
+ const candidate={code:'J45.50',description:'Severe persistent asthma, uncomplicated'};
+ assert.equal(asthmaSeveritySupported(candidate,['Persistent asthma. Consider biologic therapy.']),false);
+ assert.equal(asthmaSeveritySupported(candidate,['Severe dyspnea with persistent asthma.']),false);
+ assert.equal(asthmaSeveritySupported(candidate,['Severe persistent asthma.']),true);
+ assert.equal(asthmaSeveritySupported(candidate,['Asthma, severe persistent.']),true);
+ const mapping=validateCoding([{problemIndex:0,codes:['J45.50'],supported:true,evidenceQuotes:['Persistent asthma.'],clarification:''}],[{title:'Persistent asthma'}],[[candidate]],{update:'Persistent asthma. Consider biologic therapy.'});assert.equal(mapping[0].codes.length,0)
+});
