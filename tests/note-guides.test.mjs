@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {noteRequest} from '../server/settings.mjs';import {NOTE_GUIDES} from '../server/note-guides.mjs';import {lookupCodes,validateCoding,codeProblems,asthmaSeveritySupported} from '../server/icd.mjs';import {renderClinicalNote} from '../server/clinical-note.mjs';
+import {noteRequest} from '../server/settings.mjs';import {NOTE_GUIDES} from '../server/note-guides.mjs';import {lookupCodes,validateCoding,codeProblems,asthmaSeveritySupported,codingCandidates} from '../server/icd.mjs';import {renderClinicalNote} from '../server/clinical-note.mjs';
 const doc={sections:[{heading:'Subjective',body:'Patient denies chest pain.'}],problems:[{title:'Pneumonia',assessment:'Right basilar opacity supports the documented pneumonia.',plan:['Continue the documented antimicrobial regimen.'],searchTerms:'pneumonia unspecified organism',codeHints:['J18.9']}],generalManagement:'',disposition:'Awaiting documented culture results.',missing:[]};
 const ai=d=>Response.json({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify({...d,updateReview:d.updateReview||{complete:true,consistent:true,issues:[]}})}]}]});
 test('Owner guides contain full requested styles and repeated progress copy is removed',()=>{assert.equal(NOTE_GUIDES.progress.split('MASTER PROMPT:').length,2);assert(NOTE_GUIDES.progress.includes('SPECIAL INSTRUCTIONS WHEN I SAY'));assert(NOTE_GUIDES.admission.includes('Home Medications'));assert(NOTE_GUIDES.progress.includes('DISPOSITION'))});
@@ -30,4 +30,13 @@ test('Asthma coding cannot infer severe persistent disease from proposed biologi
  assert.equal(asthmaSeveritySupported(candidate,['Severe persistent asthma.']),true);
  assert.equal(asthmaSeveritySupported(candidate,['Asthma, severe persistent.']),true);
  const mapping=validateCoding([{problemIndex:0,codes:['J45.50'],supported:true,evidenceQuotes:['Persistent asthma.'],clarification:''}],[{title:'Persistent asthma'}],[[candidate]],{update:'Persistent asthma. Consider biologic therapy.'});assert.equal(mapping[0].codes.length,0)
+});
+
+test('Asthma lookup keeps non-severity alternatives even when generated hints overstate severity',()=>{
+ const options=codingCandidates({title:'Persistent asthma',searchTerms:'severe persistent asthma',codeHints:['J45.50']},['Persistent asthma. Consider biologic therapy.']);
+ assert(!options.some(c=>c.code==='J45.50'));assert(options.some(c=>c.code==='J45.909'));
+});
+test('A generated revision target cannot authorize a severity-specific code',()=>{
+ const candidate={code:'J45.50',description:'Severe persistent asthma, uncomplicated'};
+ const result=validateCoding([{problemIndex:0,codes:['J45.50'],supported:true,evidenceQuotes:['Severe persistent asthma.'],clarification:''}],[{title:'Asthma'}],[[candidate]],{update:'Persistent asthma.',revisionTarget:'Severe persistent asthma.'});assert.equal(result[0].codes.length,0);
 });
